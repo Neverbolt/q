@@ -1,6 +1,8 @@
-# All credits are belong to Squishy
+# Almost all credits are belong to Squishy
+# Some are belong to Goebel and Anders
 
 debug = False
+stackDebug = False
 
 
 class MachineState:
@@ -14,72 +16,114 @@ class MachineState:
         #     (`method`, [])
         self.nextActions = []
         # set of possible interpreter states
-        self.states = {"action": 0, "type": 1, "value": 2}
+        self.states = {"error": -1, "action": 0, "type": 1, "value": 2, "flowcontrol": 3}
         # current internal state/next expected value
-        self.state = self.states["action"]
+        self.state = self.states["type"]
         # action resolving
-        self.actions = {"q": self.push,
-                        "qq": self.printNextStack}
+        self.actions = {"q" * 1: self.pop,
+                        "q" * 2: self.printNextStackValue,
+                        "q" * 3: self.add,
+                        "q" * 4: self.subtract,
+                        "q" * 5: self.multiply,
+                        "q" * 6: self.divide,
+                        "q" * 7: self.duplicate,
+                        "q" * 8: self.swap,
+                        "q" * 9: self.over,
+                        "q" * 10: self.beginif,
+                        "q" * 11: self.endif,
+                        "q" * 12: self.beginelse,
+                        "q" * 13: self.endelse,
+                        """q" * 14: self.beginwhile,
+                        "q" * 15: self.endwhile""": ""}
         # type resolving
-        self.types = {"+Number": "q",
-                      "-Number": "qq",
-                      "lChar": "qqq",
-                      "uChar": "qqqq",
-                      "sChar": "qqqqq",
-                      "eval": "qqqqqqqqqq"}
-        self.sChars = "  !\"#$%&'()*+,-./:;<=>?@[\]^_`{|}~"
+        self.types = {"eval": "q",
+                      "+Number": "qq",
+                      "-Number": "qqq",
+                      "lChar": "qqqq",
+                      "uChar": "qqqqq",
+                      "sChar": "qqqqqq",
+                      "Number": "NUMBER"}
+        self.sChars = " !\n\"#$%&'()*+,-./:;<=>?@[\]^_`{|}~"
         self.currentType = self.types["eval"]
 
     # evaluate the current token in respect to state and action stack
-    def eval(self, token):
-        if self.state is self.states["action"]:
+    def eval(self, token, overwriteState=None):
+        if stackDebug:
+            print(self.stack)
+        # allow eval to be called from flowcontrol methods
+        if overwriteState is None:
+            localstate = self.state
+        else:
+            localstate = overwriteState
+
+        if localstate is self.states["action"]:
             # if action can be resolved do setup and change to parameter mode
             if token in self.actions:
-                self.actions[token](init=True)
+                localstate = self.actions[token]()
                 if debug:
-                    print("EXECUTING: " + str(self.actions[token]))
+                    print("EXECUTING: " + str(self.actions[token].__name__) + " RETURNED " + str(localstate))
+                if localstate is None:
+                    localstate = self.states["type"]
             else:
                 print("ACTION ERROR: " + str(token))
 
-        elif self.state is self.states["type"]:
+        elif localstate is self.states["type"]:
             if token is self.types["eval"]:
-                self.state = self.actions["action"]
+                localstate = self.states["action"]
+
+                if debug:
+                    print("TYPE: eval")
+
             else:
                 if token in self.types.values():
                     self.currentType = token
-                    if debug:
-                        print("TYPE: " + str(list(self.types.keys())[list(self.types.values()).index(self.currentType)]))
                 else:
                     print("TYPE ERROR: " + str(token))
 
-                self.state = self.states["value"]
+                localstate = self.states["value"]
 
-        elif self.state is self.states["value"]:
+                if debug:
+                    print("TYPE: " + str(self.getKeyFromValue(self.types, self.currentType)))
+
+        elif localstate is self.states["value"]:
             if self.currentType == self.types["+Number"]:
-                self.pushParam(len(token))
+                self.push(len(token), type=self.types["Number"])
+
             elif self.currentType == self.types["-Number"]:
-                self.pushParam(-len(token))
+                self.push(-len(token), type=self.types["Number"])
+
             elif self.currentType == self.types["lChar"]:
-                self.pushParam(chr(97 + (len(token) - 1) % 26))
+                self.push(chr(97 + (len(token) - 1) % 26))
+
             elif self.currentType == self.types["uChar"]:
-                self.pushParam(chr(65 + (len(token) - 1) % 26))
+                self.push(chr(65 + (len(token) - 1) % 26))
+
             elif self.currentType == self.types["sChar"]:
-                self.pushParam(self.sChars[len(token) % len(self.sChars)])
+                self.push(self.sChars[(len(token) - 1) % len(self.sChars)])
+
             else:
-                print("INTERNAL ACTION ERROR: " + str(self.currentType) + " : " + str(list(self.types.keys())[list(self.types.values()).index(self.currentType)]))
+                print("INTERNAL TYPE VALUE ERROR: " + str(self.currentType) + " : " + str(self.getKeyFromValue(self.types, self.currentType)))
+                return
 
             if debug:
-                print(self.currentAction())
-            self.currentAction()()
+                print("VALUE: " + str(self.stack[-1]))
+
+            localstate = self.states["type"]
+
+        elif localstate is self.states["flowcontrol"]:
+            self.currentAction()(token, self.currentParameters())
 
         else:
-            print("INTERNAL STATE ERROR: " + str(self.state))
+            print("INTERNAL STATE ERROR: " + str(localstate))
+            return
 
-    # helper method for eval
-    def pushParam(self, param):
-        self.nextActions[-1][1].append(param)
-        if debug:
-            print("PUSHED PARAM: " + str(param))
+        if overwriteState is None:
+            self.state = localstate
+        else:
+            return localstate
+
+    def createAction(self, action):
+        self.nextActions.append((action, []))
 
     # helper method to get currently evaluating method
     def currentAction(self):
@@ -89,50 +133,212 @@ class MachineState:
     def currentParameters(self):
         return self.nextActions[-1][1]
 
-    # prints the topmost element from stack
-    def printNextStack(self, init=False):
-        print(self.stack.pop())
+    def getKeyFromValue(self, dict, val):
+        return list(dict.keys())[list(dict.values()).index(val)]
 
-    # put value onto stack
-    # is always prepended by preparePush
-    def push(self, init=False):
-        if init is True:
-            self.nextActions.append((self.push, []))
+    def getCodeFromAction(self, action):
+        self.getKeyFromValue(self.actions, action)
+
+    # helper method for eval and actions
+    def push(self, param, type=None):
+        if type is None:
+            self.stack.append((self.currentType, param))
+        else:
+            self.stack.append((type, param))
+
+    # pops off the top stack element and returns it
+    def pop(self):
+        if len(self.stack) > 0:
+            return self.stack.pop()
+
+        else:
+            print("SYNTAX ERROR: no value left on stack")
+            self.state = self.states["error"]
+
+    # returns an element from stack without poping it
+    def peek(self, back=0):
+        if len(self.stack) - back > 0:
+            return self.stack[-(back + 1)]
+
+        else:
+            print("SYNTAX ERROR: no value left on stack")
+            self.state = self.states["error"]
+
+    # prints the topmost element from stack
+    def printNextStackValue(self):
+        print(self.pop()[1], end="\n", flush=True)
+
+    def add(self):
+        val1 = self.pop()
+        val2 = self.pop()
+        if val1[0] == self.types["Number"] and val2[0] == self.types["Number"]:
+            self.push(val1[1] + val2[1], type=self.types["Number"])
+        elif val1[0] == self.types["lChar"] and val2[0] == self.types["Number"]:
+            self.push(chr(97 + (ord(val1[1]) + val2[1] - 97) % 26), type=self.types["lChar"])
+        elif val1[0] == self.types["uChar"] and val2[0] == self.types["Number"]:
+            self.push(chr(65 + (ord(val1[1]) + val2[1] - 65) % 26), type=self.types["uChar"])
+        elif val1[0] == self.types["sChar"] and val2[0] == self.types["Number"]:
+            self.push(self.sChars[(self.sChars.index(val1[1]) + val2[1] - 1) % len(self.sChars)], type=self.types["sChar"])
+        else:
+            print("SYNTAX ERROR: addition of " + val1[0] + " and " + val2[0] + " not allowed")
+
+    def subtract(self):
+        val1 = self.pop()
+        val2 = self.pop()
+        if val1[0] == self.types["Number"] and val2[0] == self.types["Number"]:
+            self.push(val1[1] - val2[1], type=self.types["Number"])
+        elif val1[0] == self.types["lChar"] and val2[0] == self.types["Number"]:
+            self.push(chr(97 + (ord(val1[1]) - val2[1] - 97) % 26), type=self.types["lChar"])
+        elif val1[0] == self.types["uChar"] and val2[0] == self.types["Number"]:
+            self.push(chr(65 + (ord(val1[1]) - val2[1] - 65) % 26), type=self.types["uChar"])
+        elif val1[0] == self.types["sChar"] and val2[0] == self.types["Number"]:
+            self.push(self.sChars[(self.sChars.index(val1[1]) - val2[1] - 1) % len(self.sChars)], type=self.types["sChar"])
+        else:
+            print("SYNTAX ERROR: subtraction of " + val1[0] + " and " + val2[0] + " not allowed")
+
+    def multiply(self):
+        val1 = self.pop()
+        val2 = self.pop()
+        if val1[0] == self.types["Number"] and val2[0] == self.types["Number"]:
+            self.push(val1[1] * val2[1], type=self.types["Number"])
+        else:
+            print("SYNTAX ERROR: multiplication of " + val1[0] + " and " + val2[0] + " not allowed")
+
+    def divide(self):
+        val1 = self.pop()
+        val2 = self.pop()
+        if val1[0] == self.types["Number"] and val2[0] == self.types["Number"]:
+            self.push(val1[1] / val2[1], type=self.types["Number"])
+        else:
+            print("SYNTAX ERROR: division of " + val1[0] + " and " + val2[0] + " not allowed")
+
+    def duplicate(self):
+        self.push(self.stack[-1][1], type=self.stack[-1][0])
+
+    def xDuplicate(self):
+        index = self.pop()
+        if index[0] == self.types["Number"]:
+            self.push(self.stack[-index[1]][1], type=self.stack[-index[1]][0])
+        else:
+            print("SYNTAX ERROR: index for xDuplicate has to be number")
+
+    def xPush(self):
+        index = self.pop()
+        if index[0] == self.types["Number"]:
+            if 0 < index[1] < len(self.stack):
+                self.push(self.stack[-index[1]][1], type=self.stack[-index[1]][0])
+            else:
+                print("SYNTAX ERROR: index of xPush is not in range")
+        else:
+            print("SYNTAX ERROR: index for xPush has to be number")
+
+    def swap(self):
+        val1 = self.pop()
+        val2 = self.pop()
+        self.push(val1[1], type=val1[0])
+        self.push(val2[1], type=val2[0])
+
+    def over(self):
+        val1 = self.pop()
+        val2 = self.pop()
+        val3 = self.pop()
+        self.push(val1[1], type=val1[0])
+        self.push(val2[1], type=val2[0])
+        self.push(val3[1], type=val3[0])
+
+    def beginif(self):
+        global debug
+        global stackDebug
+        debug = False
+        stackDebug = False
+        self.createAction(self.ifaction)
+        comparison = self.peek()
+        currentVal = self.peek(back=1)
+        evaluating = False
+
+        if currentVal[0] == self.types["Number"] and comparison[0] == self.types["sChar"]:
+            if comparison[1] == ">":
+                evaluating = currentVal[1] > 0
+            elif comparison[1] == "=":
+                evaluating = currentVal[1] is 0
+            elif comparison[1] == "<":
+                evaluating = currentVal[1] < 0
+
+        self.currentParameters().append(evaluating)
+        self.currentParameters().append(self.states["type"])
+        return self.states["flowcontrol"]
+
+    def endif(self):
+        if self.currentAction() == self.ifaction:
+            self.nextActions.pop()
             self.state = self.states["type"]
         else:
-            self.stack.append(self.currentParameters()[0])
+            print("SYNTAX ERROR: endif without if")
+            self.state = self.states["error"]
+
+    def beginelse(self):
+        if self.currentAction() == self.ifaction:
+            # this is intended behavior to make some magic possible
+            self.currentParameters()[0] = not self.currentParameters()[0]
+        else:
+            print("SYNTAX ERROR: else without if")
+            self.state = self.states["error"]
+
+    def endelse(self):
+        if self.currentAction() == self.ifaction:
             self.nextActions.pop()
-            self.state = self.states["action"]
+            self.state = self.states["type"]
+        else:
+            print("SYNTAX ERROR: endif without if")
+            self.state = self.states["error"]
+
+    # parameters = [willEval, state]
+    def ifaction(self, token, parameters):
+        if parameters[1] == self.states["action"]:
+            if token == self.getCodeFromAction(self.endif):
+                self.endif()
+
+            if token == self.getCodeFromAction(self.endelse):
+                self.endelse()
+
+            elif token == self.getCodeFromAction(self.beginelse):
+                self.beginelse()
+
+            elif parameters[0] is True:
+                parameters[1] = self.eval(token, overwriteState=parameters[1])
+
+        elif parameters[0] is True:
+            parameters[1] = self.eval(token, overwriteState=parameters[1])
 
 
 # value delimiter
 #  'q'    '\t'
 
 # q
-# +0123456789...
-# qq
-# -0123456789...
-# qqq
-# abcdefghijklmnopqrstuvwxyz
-# qqqq
-# ABCDEFGHIJKLMNOPQRSTUVWXYZ
-# qqqqq
-#  !"#$%&'()*+,-./:;<=>?@[\]^_`{|}~
-# qqqqqqqqqq
 # `eval`
+# qq
+# +0123456789...
+# qqq
+# -0123456789...
+# qqqq
+# abcdefghijklmnopqrstuvwxyz
+# qqqqq
+# ABCDEFGHIJKLMNOPQRSTUVWXYZ
+# qqqqqq
+#  !\n"#$%&'()*+,-./:;<=>?@[\]^_`{|}~
 
-# hello
-# ' '
-# world!
-# \print(12)
-code = (" q qqqqq qq"
-        " q qqq qqqq q qqq qqqqqqqqqqqq q qqq qqqqqqqqqqqqqqqqqq q qqq qqqqqqqqqqqqqqq q qqqq qqqqqqqqqqqqqqqqqqqqqqq"
-        " q qqqqq q"
-        " q qqq qqqqqqqqqqqqqqq q qqq qqqqqqqqqqqq q qqq qqqqqqqqqqqq q qqq qqqqq q qqqq qqqqqqqq"
-        " qq qq qq qq qq qq qq qq qq qq qq qq")
+# Print "Hello World!"
+if __name__ == '__main__':
+    code = (" qqqqqq qqq qqqqqq qq "
+            " qqqq qqqq qqqq qqqqqqqqqqqq qqqq qqqqqqqqqqqqqqqqqq qqqq qqqqqqqqqqqqqqq qqqqq qqqqqqqqqqqqqqqqqqqqqqq "
+            " qqqqqq q "
+            " qqqq qqqqqqqqqqqqqqq qqqq qqqqqqqqqqqq qqqq qqqqqqqqqqqq qqqq qqqqq qqqqq qqqqqqqq "
+            " q qq q qq q qq q qq q qq q qq q qq q qq q qq q qq q qq q qq q qq"
+            " qq qqqqq qqq qqq q qqq qqqqqq qqqqqqqqqqqqqqqqqqqqqq q qqqqqqqqqq q qqqqqqqq q qq q qqqqqqqqqqqq qqqq q q qq q qqqqqqqqqqqqq qq qqqqq q qq")
+    """code = " q q q q q q qqq q q q q qq qqqq q q q"""  # Sashas great q code that does a lot
 
-program = code.split()
-machine = MachineState()
+    program = code.split()
+    machine = MachineState()
 
-for token in program:
-    machine.eval(token)
+    for token in program:
+        machine.eval(token)
