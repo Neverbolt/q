@@ -154,10 +154,10 @@ class MachineState:
     # parse the given value in relation to the current type information
     def parseValue(self, token, currentType):
         if currentType == self.types["+Number"]:
-            return (token, self.types["Number"])
+            return (token - 1, self.types["Number"])
 
         elif currentType == self.types["-Number"]:
-            return (-token, self.types["Number"])
+            return (-(token - 1), self.types["Number"])
 
         elif currentType == self.types["lChar"]:
             return (chr(97 + (token - 1) % 26), self.types["lChar"])

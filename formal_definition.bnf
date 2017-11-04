@@ -1,0 +1,65 @@
+. Type definitions
+beginBlock   = "q" .
+endBlock     = "qq" .
+eval         = "qqq" .
+. positive number
+pNum         = "qqqq" .
+. negative number
+nNum         = "qqqqq" .
+. lowercase character
+lChar        = "qqqqqq" .
+. uppercase character
+uChar        = "qqqqqqq" .
+. special character
+sChar        = "qqqqqqqq" .
+
+. Type groups
+num          = pNum | nNum .
+
+. Unused
+char         = lChar | uChar | sChar .
+valueType    = num | char .
+blockType    = beginBlock | endBlock .
+controlType  = blockType | eval .
+type         = valueType | controlType .
+
+
+. Value definitions
+. numeric values (upper and lower bounds are implementation specific)
+numValue     = 1*"q" .
+. everything from a-z or A-Z
+charValue    = 1*26"q" .
+. from the list of special characters [ !\n"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~]
+scharValue   = 1*34"q" .
+
+
+. Word combinations
+numWord      = num " " numValue .
+charWord     = ( lChar | uChar ) " " charValue | sChar " " scharValue .
+word         = numWord | charWord .
+
+
+. Block definition
+. named blocks need to have a word as parameter with which they can later be called
+. on name collisions the older block gets overwritten
+namedBlock   = beginBlock "q" sentence endBlock "q" .
+. anon blocks push their id on the stack after being loaded
+. anon ids are guaranteed to not collide, however they need/should not follow a consistent pattern or starting point
+anonBlock    = beginBlock "qq" sentence endBlock "qq" .
+
+block        = namedBlock | anonBlock .
+
+. Action combinations
+. simple actions evaluate the last element on the stack exactly once
+simpleAction = eval "q" .
+. conditional actions evaluate the second to last element on the stack if the last element is <= 0
+condAction   = eval "qq" .
+. loop actions evaluate the second to last element on the stack until the last element is <= 0
+loopAction   = eval "qqq" .
+. all actions can either evaluate built in (positive) functions or custom (negative) functions
+. the action ids are only ever removed from stack if the action has been fully completed (eg loop has been broken)
+action       = simpleAction | condAction | loopAction
+
+. Program
+sentence     = *( word | block | action ) .
+program      = *sentence <EOF> .

@@ -19,9 +19,9 @@ if __name__ == '__main__':
             " qq q qqq q"
             )"""
     code = ("""
-                qqqq qqqqq 5 qqqq qq 2
+                qqqq qqqqqq 5 qqqq qqq 2
                 q q method1begin
-                    qqqq q 1 qqqq qqqqq qqq q -
+                    qqqq qq 1 qqqq qqqqq qqq q -
                 qq q method1end qqq qqq methode1execWHILE
                 qqqq qqq qqq q print
             """)

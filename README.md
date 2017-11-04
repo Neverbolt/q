@@ -1,53 +1,20 @@
 # KuhTap
 
-A stack based, reverse polish, turing complete programming language that consists of the letter `q`and the control character `\t`.
+A stack based, reverse polish, turing complete programming language that consists of the letter `q` and the control character `\t`.
 
 This is powerful, use at own risk!
 
-# Types
+# Grammar
 
-## OLD:
-- Eval:                `q`
-- Positive number:     `qq`
-- Negative number:     `qqq`
-- Lowercase character: `qqqq`
-- Uppercase character: `qqqqq`
-- Special character:   `qqqqqq`
-- Begin Code Block:    `qqqqqqq`
-- End Code Block:      `qqqqqqqq`
-
-## NEW:
-- Begin Code Block:    `q`
-- End Code Block:      `qq`
-- Eval:                `qqq`
-- Positive number:     `qqqq`
-- Negative number:     `qqqqq`
-- Lowercase character: `qqqqqq`
-- Uppercase character: `qqqqqqq`
-- Special character:   `qqqqqqqq`
-
-# Codeblock
-
-The parameter after an end block is the methodID which starts counting at 20. That means that if your codeblock ends with `qqqqqqqq q` it can later be called back with the ID `21` (`qqqqqqqqqqqqqqqqqqqqqqqqq`).
-Eg:
-```
-qqqqqqq q qqq qq q q qqqqqqqq q this is the codeblock
-qqqq qqqqqqqqqqqqqqqqqqqqqqqqq qqq q this sets up the code and calls the block
-```
-
-# Character usage
-
-Lower and upper case characters repeat from a-z or A-Z respectively, special characters repeat the following sequence where the first character is a space:
-```
- !\n"#$%&'()*+,-./:;<=>?@[\]^_`{|}~
-```
+For a grammar specification see the file `formal_definition.bnf`
 
 # Actions
+q comes with a set of built-in actions that are called with positive numbers. All string actions are numeric zero terminated unless noted otherwise.
 
 - Pop (`q`):
   - Pop the stack value
 - Print (`qq`):
-  - Pops the top stack value and prints it
+  - Prints all characters until it encounters a numeric zero
 - Add (`qqq`):
   - Add top two stack values and push the result to stack
 - Subtract (`qqqq`):
